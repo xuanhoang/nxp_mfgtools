@@ -106,7 +106,14 @@ static int run_usb_cmds(ConfigItem *item, libusb_device *dev)
 	nt.type = uuu_notify::NOFITY_DEV_ATTACH;
 
 	string str;
+	string pro;
+	
 	str = get_device_path(dev);
+	pro = item->m_protocol;
+	pro.pop_back();
+
+	str = str + "|" + pro;
+
 	nt.str = (char*)str.c_str();
 	call_notify(nt);
 
@@ -167,9 +174,13 @@ static int usb_add(libusb_device *dev)
 	return 0;
 }
 
-static int usb_remove(libusb_device * /*dev*/)
+static int usb_remove(libusb_device *dev)
 {
-
+	uuu_notify nt;
+	nt.type = uuu_notify::NOTIFY_DEV_DETACH;
+	string str = get_device_path(dev);
+	nt.str = (char*)str.c_str();
+	call_notify(nt);
 	return 0;
 }
 
@@ -316,6 +327,7 @@ int CmdUsbCtx::look_for_match_device(const char *pro)
 				return -1;
 			}
 			string str = get_device_path(dev);
+			string pro;
 
 			if (!is_match_filter(str))
 				continue;
@@ -343,6 +355,11 @@ int CmdUsbCtx::look_for_match_device(const char *pro)
 					}
 
 					libusb_free_device_list(list, 1);
+
+					pro = item->m_protocol;
+					pro.pop_back();
+					str = str + "|" + pro;
+
 					nt.str = (char*)str.c_str();
 					call_notify(nt);
 
