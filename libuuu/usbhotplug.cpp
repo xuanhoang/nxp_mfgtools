@@ -327,7 +327,7 @@ int CmdUsbCtx::look_for_match_device(const char *pro)
 				return -1;
 			}
 			string str = get_device_path(dev);
-			string pro;
+			string proStr;
 
 			if (!is_match_filter(str))
 				continue;
@@ -356,9 +356,9 @@ int CmdUsbCtx::look_for_match_device(const char *pro)
 
 					libusb_free_device_list(list, 1);
 
-					pro = item->m_protocol;
-					pro.pop_back();
-					str = str + "|" + pro;
+					proStr = item->m_protocol;
+					proStr.pop_back();
+					str = str + "|" + proStr;
 
 					nt.str = (char*)str.c_str();
 					call_notify(nt);
