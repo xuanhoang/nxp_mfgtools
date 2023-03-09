@@ -1,6 +1,6 @@
 [submodule "libusb"]
 	path = libusb
-	url = https://github.com/nxpfrankli/libusb.git
+	url = git@bitbucket.org:elinkgate/libusbelink.git
 [submodule "zlib"]
 	path = zlib
 	url = https://github.com/madler/zlib.git
