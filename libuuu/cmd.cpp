@@ -40,6 +40,7 @@
 #include "config.h"
 #include "trans.h"
 #include "sdps.h"
+#include "elinks.h"
 #include <atomic>
 #include "buffer.h"
 #include "sdp.h"
@@ -390,6 +391,13 @@ template <class T> shared_ptr<CmdBase> new_cmd_obj(char *p)
 CmdObjCreateMap::CmdObjCreateMap()
 {
 	(*this)["CFG:"] = new_cmd_obj<CfgCmd>;
+
+  (*this)["EL:VERSION"] = new_cmd_obj<ElinkVersionCmd>;
+  (*this)["EL:INFO"] = new_cmd_obj<ElinkInfoCmd>;
+  (*this)["EL:MODE"] = new_cmd_obj<ElinkSCmd>;
+  (*this)["EL:WRITE"] = new_cmd_obj<ElinkWriteCmd>;
+  (*this)["EL:EXEC"] = new_cmd_obj<ElinkExecCmd>;
+
 
 	(*this)["SDPS:BOOT"] = new_cmd_obj<SDPSCmd>;
 

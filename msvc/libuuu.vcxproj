@@ -22,6 +22,7 @@
     <ClCompile Include="..\libuuu\buffer.cpp" />
     <ClCompile Include="..\libuuu\cmd.cpp" />
     <ClCompile Include="..\libuuu\config.cpp" />
+    <ClCompile Include="..\libuuu\elinks.cpp" />
     <ClCompile Include="..\libuuu\error.cpp" />
     <ClCompile Include="..\libuuu\fastboot.cpp" />
     <ClCompile Include="..\libuuu\fat.cpp" />
@@ -43,6 +44,7 @@
     <ClInclude Include="..\libuuu\buffer.h" />
     <ClInclude Include="..\libuuu\cmd.h" />
     <ClInclude Include="..\libuuu\config.h" />
+    <ClInclude Include="..\libuuu\elinks.h" />
     <ClInclude Include="..\libuuu\fastboot.h" />
     <ClInclude Include="..\libuuu\hidreport.h" />
     <ClInclude Include="..\libuuu\http.h" />

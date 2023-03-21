@@ -45,6 +45,11 @@
 #include "vector"
 #include <time.h>
 
+extern "C" {
+#include "setupapi.h" 
+#include "hidsdi.h"
+}
+
 static vector<thread> g_running_thread;
 
 static vector<string> g_filter_usbpath;
@@ -61,6 +66,8 @@ static int g_libusb_init;
 #else
 #define TRY_SUDO ",Try sudo uuu"
 #endif
+
+static HANDLE get_elink_keyboard_handle(void);
 
 static bool is_match_filter(string path)
 {
@@ -99,6 +106,52 @@ static string get_device_path(libusb_device *dev)
 	return str;
 }
 
+HANDLE get_elink_keyboard_handle()
+{
+  static const GUID GUID_DEVINTERFACE_KEYBOARD =
+  { 0x884B96C3, 0x56EF, 0x11D1, {0xBC, 0x8C, 0x00, 0xA0, 0xC9, 0x14, 0x05, 0xDD} };
+  HDEVINFO                            deviceInfoList;
+  SP_DEVICE_INTERFACE_DATA            deviceInfo;
+  SP_DEVICE_INTERFACE_DETAIL_DATA     *deviceDetails = NULL;
+  DWORD                               size;
+  int                                 num_intf = 0, openFlag = 0;  /* may be FILE_FLAG_OVERLAPPED */
+  HANDLE                              handle = INVALID_HANDLE_VALUE;
+  HIDD_ATTRIBUTES                     deviceAttributes;
+
+  GUID  *hidGuid = (GUID*)&GUID_DEVINTERFACE_KEYBOARD;
+  deviceInfoList = SetupDiGetClassDevs(hidGuid, NULL, NULL, DIGCF_PRESENT | DIGCF_INTERFACEDEVICE);
+  deviceInfo.cbSize = sizeof(deviceInfo);
+
+  do {
+    if (!SetupDiEnumDeviceInterfaces(deviceInfoList, 0, hidGuid, num_intf, &deviceInfo))
+      break;  /* no more entries */
+    /* first do a dummy call just to determine the actual size required */
+    SetupDiGetDeviceInterfaceDetail(deviceInfoList, &deviceInfo, NULL, 0, &size, NULL);
+    if (deviceDetails != NULL) {
+      free(deviceDetails);
+    }
+    deviceDetails = (SP_DEVICE_INTERFACE_DETAIL_DATA *)malloc(size);
+    deviceDetails->cbSize = sizeof(*deviceDetails);
+    /* this call is for real: */
+    SetupDiGetDeviceInterfaceDetail(deviceInfoList, &deviceInfo, deviceDetails, size, &size, NULL);
+
+    handle = CreateFile(deviceDetails->DevicePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    deviceAttributes.Size = sizeof(deviceAttributes);
+    HidD_GetAttributes(handle, &deviceAttributes);
+    if (deviceAttributes.VendorID != 0x483 || deviceAttributes.ProductID != 0xA2d6) {
+      CloseHandle(handle);
+      handle = INVALID_HANDLE_VALUE;
+      num_intf++;
+      continue;   /* ignore this device */
+    }
+  } while (handle == INVALID_HANDLE_VALUE);
+  if (deviceDetails != NULL) {
+    free(deviceDetails);
+  }
+  return handle == INVALID_HANDLE_VALUE ? 0 : handle;
+}
+
+
 static int run_usb_cmds(ConfigItem *item, libusb_device *dev)
 {
 	int ret;
@@ -126,7 +179,15 @@ static int run_usb_cmds(ConfigItem *item, libusb_device *dev)
 	 */
 	libusb_device **list = nullptr;
 	libusb_get_device_list(nullptr, &list);
-
+#if 1
+  if (item->m_protocol == "EL:") {
+    ctx.m_hid_dev = get_elink_keyboard_handle();
+    if (ctx.m_hid_dev == NULL) {
+      return -1;
+    }
+  }
+  else
+#endif
 	if (libusb_open(dev, (libusb_device_handle **)&(ctx.m_dev)) < 0)
 	{
 		set_last_err_string("Failure open usb device" TRY_SUDO);
@@ -289,6 +350,11 @@ CmdUsbCtx::~CmdUsbCtx()
 		libusb_close((libusb_device_handle*)m_dev);
 		m_dev = 0;
 	}
+
+  if (m_hid_dev) {
+    CloseHandle(m_hid_dev);
+    m_hid_dev = 0;
+  }
 }
 
 int CmdUsbCtx::look_for_match_device(const char *pro)
@@ -346,6 +412,15 @@ int CmdUsbCtx::look_for_match_device(const char *pro)
 					std::this_thread::sleep_for(std::chrono::milliseconds(200));
 					libusb_device **list = nullptr;
 					libusb_get_device_list(nullptr, &list);
+#if 1
+          if (item->m_protocol == "EL:") {
+            m_hid_dev = get_elink_keyboard_handle();
+            if (m_hid_dev == NULL) {
+              return -1;
+            }
+          }
+          else
+#endif
 
 					if (libusb_open(dev, (libusb_device_handle **)&(m_dev)) < 0)
 					{

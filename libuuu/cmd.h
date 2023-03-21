@@ -50,6 +50,7 @@ public:
 
 	ConfigItem *m_config_item = nullptr;
 	void *m_dev = nullptr;
+  void *m_hid_dev = nullptr;
 };
 
 class CmdUsbCtx : public CmdCtx
