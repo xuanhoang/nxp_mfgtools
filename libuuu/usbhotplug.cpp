@@ -44,6 +44,10 @@
 #include "libuuu.h"
 #include "vector"
 #include <time.h>
+#include <string>
+#include <algorithm>
+#include <wchar.h>
+#include <cfgmgr32.h>
 
 extern "C" {
 #include "setupapi.h" 
@@ -67,7 +71,7 @@ static int g_libusb_init;
 #define TRY_SUDO ",Try sudo uuu"
 #endif
 
-static HANDLE get_elink_keyboard_handle(void);
+static HANDLE get_elink_keyboard_handle(libusb_device *dev);
 
 static bool is_match_filter(string path)
 {
@@ -106,7 +110,66 @@ static string get_device_path(libusb_device *dev)
 	return str;
 }
 
-HANDLE get_elink_keyboard_handle()
+bool is_parent_of_hid(char *devpath, libusb_device *dev) {
+  CONFIGRET   cr;
+  DEVINST     devInst;
+  // https://social.msdn.microsoft.com/Forums/windowsdesktop/en-US/b4718e40-78b6-4400-8e1d-b8a632aac691/find-hub-port-for-hid-device?forum=wdk
+  char *path = libusb_get_device_path(dev);
+  cr = CM_Locate_DevNode(&devInst, path, 0);
+  if (cr == CR_SUCCESS) {
+    DEVINST     usbConfiguration0DeviceInstance;
+    char buffer1[MAX_DEVICE_ID_LEN];
+    cr = CM_Get_Child(&usbConfiguration0DeviceInstance, devInst, 0);
+    if (cr == CR_SUCCESS) {
+      cr = CM_Get_Device_ID(usbConfiguration0DeviceInstance, buffer1, MAX_DEVICE_ID_LEN, 0);
+      if (cr == CR_SUCCESS) {
+        size_t n;
+        std::string str1(devpath);
+        std::string str2(buffer1);
+        while (1) {
+          n = str1.find('#');
+          if (n != std::string::npos) {
+            str1.erase(0, n + 1);
+            if (str1.substr(0, 4) == "vid_") {
+              n = str1.find('#');
+              if (n == std::string::npos)
+                return false;
+              str1.erase(0,n+1);
+              n = str1.find('#');
+              if (n == std::string::npos)
+                return false;
+              str1.erase(n);
+              break;
+            }
+          } 
+          else 
+            break;
+        }
+        while (1) {
+          n = str2.find('\\');
+          if (n != std::string::npos) {
+            str2.erase(0, n + 1);
+            if (str2.substr(0, 4) == "VID_") {
+              n = str2.find('\\');
+              str2.erase(0,n+1);
+              break;
+            }
+          }
+          else
+            break;
+        }
+        std::transform(str1.begin(), str1.end(), str1.begin(), ::toupper);
+        std::transform(str2.begin(), str2.end(), str2.begin(), ::toupper);
+        if (str1 == str2)
+          return true;
+      }
+    }
+
+  }
+  return false;
+}
+
+HANDLE get_elink_keyboard_handle(libusb_device *dev)
 {
   static const GUID GUID_DEVINTERFACE_KEYBOARD =
   { 0x884B96C3, 0x56EF, 0x11D1, {0xBC, 0x8C, 0x00, 0xA0, 0xC9, 0x14, 0x05, 0xDD} };
@@ -138,7 +201,8 @@ HANDLE get_elink_keyboard_handle()
     handle = CreateFile(deviceDetails->DevicePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     deviceAttributes.Size = sizeof(deviceAttributes);
     HidD_GetAttributes(handle, &deviceAttributes);
-    if (deviceAttributes.VendorID != 0x483 || deviceAttributes.ProductID != 0xA2d6) {
+    //libusb_get_device_by_hid(NULL, deviceDetails->DevicePath);
+    if (deviceAttributes.VendorID != 0x483 || deviceAttributes.ProductID != 0xA2d6 || !is_parent_of_hid(deviceDetails->DevicePath,dev)) {
       CloseHandle(handle);
       handle = INVALID_HANDLE_VALUE;
       num_intf++;
@@ -181,7 +245,7 @@ static int run_usb_cmds(ConfigItem *item, libusb_device *dev)
 	libusb_get_device_list(nullptr, &list);
 #if 1
   if (item->m_protocol == "EL:") {
-    ctx.m_hid_dev = get_elink_keyboard_handle();
+    ctx.m_hid_dev = get_elink_keyboard_handle(dev);
     if (ctx.m_hid_dev == NULL) {
       return -1;
     }
@@ -414,7 +478,7 @@ int CmdUsbCtx::look_for_match_device(const char *pro)
 					libusb_get_device_list(nullptr, &list);
 #if 1
           if (item->m_protocol == "EL:") {
-            m_hid_dev = get_elink_keyboard_handle();
+            m_hid_dev = get_elink_keyboard_handle(dev);
             if (m_hid_dev == NULL) {
               return -1;
             }
