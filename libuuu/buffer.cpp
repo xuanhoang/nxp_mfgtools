@@ -46,14 +46,28 @@
 #include <limits>
 #include "http.h"
 
+
 #ifdef _MSC_VER
 #define stat64 _stat64
 #else
 #include "dirent.h"
 #endif
 
-static map<string, shared_ptr<FileBuffer>> g_filebuffer_map;
-static mutex g_mutex_map;
+class BufferWs {
+public:
+	BufferWs() {}
+	~BufferWs();
+public:
+	map<string, shared_ptr<FileBuffer>> g_filebuffer_map;
+	mutex g_mutex_map;
+};
+
+BufferWs::~BufferWs()
+{
+    std::lock_guard<mutex> lock(g_mutex_map);
+    g_filebuffer_map.clear();
+}
+static BufferWs bufferWs;
 
 #define MAGIC_PATH '>'
 
@@ -1173,8 +1187,8 @@ shared_ptr<FileBuffer> get_file_buffer(string filename, bool async)
 
 	bool find;
 	{
-		std::lock_guard<mutex> lock(g_mutex_map);
-		find = (g_filebuffer_map.find(filename) == g_filebuffer_map.end());
+		std::lock_guard<mutex> lock(bufferWs.g_mutex_map);
+		find = (bufferWs.g_filebuffer_map.find(filename) == bufferWs.g_filebuffer_map.end());
 	}
 
 	if (find)
@@ -1185,8 +1199,8 @@ shared_ptr<FileBuffer> get_file_buffer(string filename, bool async)
 			return nullptr;
 
 		{
-			std::lock_guard<mutex> lock(g_mutex_map);
-			g_filebuffer_map[filename] = p;
+			std::lock_guard<mutex> lock(bufferWs.g_mutex_map);
+			bufferWs.g_filebuffer_map[filename] = p;
 		}
 		return p;
 	}
@@ -1194,8 +1208,8 @@ shared_ptr<FileBuffer> get_file_buffer(string filename, bool async)
 	{
 		shared_ptr<FileBuffer> p;
 		{
-			std::lock_guard<mutex> lock(g_mutex_map);
-			p= g_filebuffer_map[filename];
+			std::lock_guard<mutex> lock(bufferWs.g_mutex_map);
+			p= bufferWs.g_filebuffer_map[filename];
 		}
 		if (p->m_timesample != get_file_timesample(filename))
 			if (p->reload(filename, async))
@@ -1534,10 +1548,10 @@ int file_overwrite_monitor(string filename, FileBuffer *p)
 
 	if(p->m_pDatabuffer && p->get_m_allocate_way() == FileBuffer::ALLOCATION_WAYS::MMAP)
 	{
-		std::lock_guard<mutex> lock(g_mutex_map);
+		std::lock_guard<mutex> lock(bufferWs.g_mutex_map);
 		p->m_file_monitor.detach(); /*Detach itself, erase will delete p*/
-		if(g_filebuffer_map.find(str) != g_filebuffer_map.end())
-			g_filebuffer_map.erase(str);
+		if(bufferWs.g_filebuffer_map.find(str) != bufferWs.g_filebuffer_map.end())
+			bufferWs.g_filebuffer_map.erase(str);
 	}
 
 	return 0;
